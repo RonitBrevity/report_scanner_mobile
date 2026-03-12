@@ -30,23 +30,23 @@ class ApiClient {
     const String hostIp = 'localhost';
 
     if (kIsWeb) {
-      return 'http://localhost:5219';
-      //return 'http://103.92.121.94:9043';
+      //return 'http://localhost:5219';
+      return 'http://103.92.121.94:9043';
     }
 
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
-        return 'http://$hostIp:5219';
-      //return 'http://103.92.121.94:9043';
+        // return 'http://$hostIp:5219';
+        return 'http://103.92.121.94:9043';
       case TargetPlatform.iOS:
       case TargetPlatform.macOS:
       case TargetPlatform.windows:
       case TargetPlatform.linux:
-        return 'http://localhost:5219';
-      //return 'http://103.92.121.94:9043';
+        //return 'http://localhost:5219';
+        return 'http://103.92.121.94:9043';
       case TargetPlatform.fuchsia:
-        return 'http://localhost:5219';
-      //return 'http://103.92.121.94:9043';
+        //return 'http://localhost:5219';
+        return 'http://103.92.121.94:9043';
     }
   }
 }
@@ -71,6 +71,13 @@ class ApiException implements Exception {
       }
     }
     if (responseData is String && responseData.isNotEmpty) {
+      final lower = responseData.toLowerCase();
+      if (lower.contains('<!doctype') || lower.contains('<html')) {
+        final status = exception.response?.statusCode;
+        return ApiException(
+          status == null ? fallback : 'Server error ($status).',
+        );
+      }
       return ApiException(responseData);
     }
     return ApiException(fallback);

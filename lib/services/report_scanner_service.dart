@@ -100,6 +100,16 @@ class ReportScannerService {
     try {
       await _client.dio.delete('/api/reports/$reportId');
     } on DioException catch (e) {
+      // Some servers (IIS) block DELETE; fall back to POST.
+      final status = e.response?.statusCode;
+      if (status == 405) {
+        try {
+          await _client.dio.post('/api/reports/$reportId/delete');
+          return;
+        } on DioException catch (postError) {
+          throw ApiException.fromDioException(postError, fallback: 'Failed to delete report.');
+        }
+      }
       throw ApiException.fromDioException(e, fallback: 'Failed to delete report.');
     }
   }
