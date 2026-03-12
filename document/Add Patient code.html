@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Add Patient - HealthScan AI</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#ec5b13",
+                        "background-light": "#f8f6f6",
+                        "background-dark": "#221610",
+                        "medical-teal": "#0d9488",
+                    },
+                    fontFamily: {
+                        "display": ["Public Sans"]
+                    },
+                    borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background-light dark:bg-background-dark font-display text-slate-900 dark:text-slate-100 antialiased">
+<div class="relative flex h-auto min-h-screen w-full flex-col overflow-x-hidden max-w-md mx-auto shadow-2xl bg-white dark:bg-slate-900">
+<!-- TopAppBar -->
+<header class="flex items-center p-4 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 sticky top-0 z-10">
+<div class="text-slate-900 dark:text-slate-100 flex size-10 shrink-0 items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer">
+<span class="material-symbols-outlined">arrow_back</span>
+</div>
+<h1 class="text-xl font-bold leading-tight tracking-tight flex-1 ml-4">Add Patient</h1>
+</header>
+<main class="flex-1 overflow-y-auto">
+<!-- Form Header Section -->
+<div class="px-6 py-6">
+<h2 class="text-lg font-bold mb-1">Personal Information</h2>
+<p class="text-sm text-slate-500 dark:text-slate-400">Please provide the patient's basic details for accurate health scanning.</p>
+</div>
+<!-- Form Body -->
+<form class="space-y-5 px-6 pb-24">
+<!-- Patient Name -->
+<div class="flex flex-col gap-2">
+<label class="text-sm font-semibold text-slate-700 dark:text-slate-300">Patient Name</label>
+<input class="form-input flex w-full rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:ring-2 focus:ring-primary focus:border-primary h-14 placeholder:text-slate-400 dark:placeholder:text-slate-500 p-4 text-base font-normal" placeholder="Enter full name" type="text"/>
+</div>
+<!-- Date of Birth -->
+<div class="flex flex-col gap-2">
+<label class="text-sm font-semibold text-slate-700 dark:text-slate-300">Date of Birth</label>
+<div class="relative">
+<input class="form-input flex w-full rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:ring-2 focus:ring-primary focus:border-primary h-14 placeholder:text-slate-400 dark:placeholder:text-slate-500 p-4 text-base font-normal" placeholder="DD/MM/YYYY" type="text"/>
+<div class="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500">
+<span class="material-symbols-outlined">calendar_today</span>
+</div>
+</div>
+</div>
+<!-- Gender Selection -->
+<div class="flex flex-col gap-3">
+<label class="text-sm font-semibold text-slate-700 dark:text-slate-300">Gender</label>
+<div class="grid grid-cols-3 gap-3">
+<button class="flex items-center justify-center gap-2 h-12 rounded-xl border-2 border-primary bg-primary/10 text-primary font-medium" type="button">
+<span class="material-symbols-outlined text-lg">male</span> Male
+                        </button>
+<button class="flex items-center justify-center gap-2 h-12 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400" type="button">
+<span class="material-symbols-outlined text-lg">female</span> Female
+                        </button>
+<button class="flex items-center justify-center gap-2 h-12 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-sm" type="button">
+                            Other
+                        </button>
+</div>
+</div>
+<!-- Relationship Dropdown -->
+<div class="flex flex-col gap-2">
+<label class="text-sm font-semibold text-slate-700 dark:text-slate-300">Relationship</label>
+<div class="relative">
+<select class="form-select flex w-full rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:ring-2 focus:ring-primary focus:border-primary h-14 appearance-none p-4 text-base font-normal">
+<option value="self">Self</option>
+<option value="parent">Parent</option>
+<option value="child">Child</option>
+<option value="spouse">Spouse</option>
+<option value="other">Other</option>
+</select>
+<div class="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+<span class="material-symbols-outlined">expand_more</span>
+</div>
+</div>
+</div>
+<!-- Blood Group Selection -->
+<div class="flex flex-col gap-2">
+<label class="text-sm font-semibold text-slate-700 dark:text-slate-300">Blood Group</label>
+<div class="flex flex-wrap gap-2">
+<button class="px-4 py-2 rounded-full border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-medium hover:border-primary transition-colors" type="button">A+</button>
+<button class="px-4 py-2 rounded-full border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-medium hover:border-primary transition-colors" type="button">A-</button>
+<button class="px-4 py-2 rounded-full border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-medium hover:border-primary transition-colors" type="button">B+</button>
+<button class="px-4 py-2 rounded-full border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-medium hover:border-primary transition-colors" type="button">B-</button>
+<button class="px-4 py-2 rounded-full border-2 border-primary bg-primary/10 text-primary text-sm font-bold" type="button">O+</button>
+<button class="px-4 py-2 rounded-full border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-medium hover:border-primary transition-colors" type="button">O-</button>
+<button class="px-4 py-2 rounded-full border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-medium hover:border-primary transition-colors" type="button">AB+</button>
+</div>
+</div>
+<!-- Optional Medical ID Field -->
+<div class="flex items-center gap-3 p-4 rounded-xl bg-primary/5 border border-primary/20 mt-4">
+<span class="material-symbols-outlined text-primary">info</span>
+<p class="text-xs text-slate-600 dark:text-slate-400">All data is encrypted and used only for diagnostic scanning purposes.</p>
+</div>
+</form>
+</main>
+<!-- Footer Button -->
+<footer class="sticky bottom-0 w-full p-6 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800">
+<button class="w-full h-14 bg-medical-teal hover:bg-teal-700 text-white rounded-xl font-bold text-lg flex items-center justify-center gap-2 shadow-lg transition-all active:scale-[0.98]">
+<span class="material-symbols-outlined">save</span>
+                Save Patient
+            </button>
+</footer>
+</div>
+</body></html>
