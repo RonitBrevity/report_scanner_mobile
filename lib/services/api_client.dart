@@ -30,23 +30,23 @@ class ApiClient {
     const String hostIp = 'localhost';
 
     if (kIsWeb) {
-      return 'http://localhost:5219';
-      //return 'http://103.92.121.94:9043';
+      //return 'http://localhost:5219';
+      return 'http://103.92.121.94:9043';
     }
 
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
-        return 'http://$hostIp:5219';
-      //return 'http://103.92.121.94:9043';
+        //return 'http://$hostIp:5219';
+        return 'http://103.92.121.94:9043';
       case TargetPlatform.iOS:
       case TargetPlatform.macOS:
       case TargetPlatform.windows:
       case TargetPlatform.linux:
-        return 'http://localhost:5219';
-      //return 'http://103.92.121.94:9043';
+        //return 'http://localhost:5219';
+        return 'http://103.92.121.94:9043';
       case TargetPlatform.fuchsia:
-        return 'http://localhost:5219';
-      //return 'http://103.92.121.94:9043';
+        //return 'http://localhost:5219';
+        return 'http://103.92.121.94:9043';
     }
   }
 }

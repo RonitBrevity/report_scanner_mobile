@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:image_picker/image_picker.dart';
+import 'package:image/image.dart' as img;
 import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -42,6 +43,20 @@ class ReportDocumentService {
       );
     }
 
+    final tempDirectory = await getTemporaryDirectory();
+    final stitchedImage = await _stitchImages(images);
+    if (stitchedImage != null) {
+      final jpgBytes = img.encodeJpg(stitchedImage, quality: 85);
+      final file = File(
+        '${tempDirectory.path}${Platform.pathSeparator}multi_report_${DateTime.now().millisecondsSinceEpoch}.jpg',
+      );
+      await file.writeAsBytes(jpgBytes);
+      return PreparedUploadDocument(
+        fileName: file.uri.pathSegments.last,
+        filePath: file.path,
+      );
+    }
+
     final document = pw.Document();
     for (final image in images) {
       final bytes = await image.readAsBytes();
@@ -56,7 +71,6 @@ class ReportDocumentService {
       );
     }
 
-    final tempDirectory = await getTemporaryDirectory();
     final file = File(
       '${tempDirectory.path}${Platform.pathSeparator}multi_report_${DateTime.now().millisecondsSinceEpoch}.pdf',
     );
@@ -172,4 +186,36 @@ class ReportDocumentService {
 
   String _formatDate(DateTime date) =>
       '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
+
+  Future<img.Image?> _stitchImages(List<XFile> images) async {
+    final decodedImages = <img.Image>[];
+
+    for (final image in images) {
+      final bytes = await image.readAsBytes();
+      final decoded = img.decodeImage(bytes);
+      if (decoded == null) {
+        continue;
+      }
+      decodedImages.add(decoded);
+    }
+
+    if (decodedImages.isEmpty) {
+      return null;
+    }
+
+    final maxWidth = decodedImages.map((i) => i.width).reduce((a, b) => a > b ? a : b);
+    final totalHeight = decodedImages.fold<int>(0, (sum, i) => sum + i.height);
+
+    final canvas = img.Image(width: maxWidth, height: totalHeight);
+    img.fill(canvas, color: img.ColorRgb8(255, 255, 255));
+
+    var offsetY = 0;
+    for (final image in decodedImages) {
+      final offsetX = ((maxWidth - image.width) / 2).round();
+      img.compositeImage(canvas, image, dstX: offsetX, dstY: offsetY);
+      offsetY += image.height;
+    }
+
+    return canvas;
+  }
 }

@@ -5,6 +5,8 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:file_saver/file_saver.dart';
 
 import '../controllers/scanner_controller.dart';
 import '../models/patient.dart';
@@ -65,7 +67,9 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
   Future<void> _pickCameraImage() async {
     final image = await _picker.pickImage(
       source: ImageSource.camera,
-      imageQuality: 90,
+      imageQuality: 80,
+      maxWidth: 1600,
+      maxHeight: 1600,
     );
     if (image == null) {
       return;
@@ -81,7 +85,11 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
   }
 
   Future<void> _pickGalleryImages() async {
-    final images = await _picker.pickMultiImage(imageQuality: 90);
+    final images = await _picker.pickMultiImage(
+      imageQuality: 80,
+      maxWidth: 1600,
+      maxHeight: 1600,
+    );
     if (images.isEmpty) {
       return;
     }
@@ -118,7 +126,10 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
   Future<void> _exportCurrentReport() async {
     try {
       final path = await widget.controller.exportCurrentReportPdf();
-      _showMessage('Current report PDF saved to $path');
+      final savedPath = await _savePdfToDevice(path, 'healthscan_current_report');
+      _showMessage(savedPath == null
+          ? 'Download canceled.'
+          : 'Current report saved to $savedPath');
     } catch (error) {
       _showMessage(error.toString());
     }
@@ -127,10 +138,23 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
   Future<void> _exportPastReport(ReportDetails report) async {
     try {
       final path = await widget.controller.exportPastReportPdf(report);
-      _showMessage('Past report PDF saved to $path');
+      final savedPath = await _savePdfToDevice(path, 'healthscan_${report.reportId}');
+      _showMessage(savedPath == null
+          ? 'Download canceled.'
+          : 'Past report saved to $savedPath');
     } catch (error) {
       _showMessage(error.toString());
     }
+  }
+
+  Future<String?> _savePdfToDevice(String path, String baseName) async {
+    final bytes = await File(path).readAsBytes();
+    return FileSaver.instance.saveFile(
+      name: baseName,
+      bytes: bytes,
+      ext: 'pdf',
+      mimeType: MimeType.pdf,
+    );
   }
 
   Future<void> _confirmDeleteReport(ReportDetails report) async {
@@ -608,63 +632,91 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
     final report = controller.report;
     final pastReports = _applyFilters(controller.pastReports);
 
-    return SafeArea(
-      child: CustomScrollView(
-        controller: _scrollController,
-        slivers: [
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
-            sliver: SliverList(
-              delegate: SliverChildListDelegate(
-                [
-                  _PatientSelectorBar(
-                    patient: controller.selectedPatient,
-                    subtitle: controller.selectedPatient != null
-                        ? '${controller.selectedPatient!.gender}, ${controller.selectedPatient!.age}y'
-                        : 'No patient selected',
-                    onTap: controller.isBusy ? null : () => _showPatientSelection(controller),
-                  ),
-                  const SizedBox(height: 12),
-                  _buildPatientDetailsCard(controller, colorScheme, theme),
-                  const SizedBox(height: 16),
-                  if (controller.isSubmitting)
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 24),
-                      child: Center(child: CircularProgressIndicator()),
-                    ),
-                  if (controller.error != null)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 12),
-                      child: Text(
-                        controller.error!,
-                        style: TextStyle(color: colorScheme.error),
+    return Stack(
+      children: [
+        SafeArea(
+          child: CustomScrollView(
+            controller: _scrollController,
+            slivers: [
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
+                sliver: SliverList(
+                  delegate: SliverChildListDelegate(
+                    [
+                      _PatientSelectorBar(
+                        patient: controller.selectedPatient,
+                        subtitle: controller.selectedPatient != null
+                            ? '${controller.selectedPatient!.gender}, ${controller.selectedPatient!.age}y'
+                            : 'No patient selected',
+                        onTap: controller.isBusy ? null : () => _showPatientSelection(controller),
                       ),
-                    ),
-                  if (report != null) ...[
-                    const SizedBox(height: 24),
-                    _buildReportDetailsCard(
-                      report: report,
-                      controller: controller,
-                      theme: theme,
-                      title: 'Current Report',
-                      onExport: _exportCurrentReport,
-                      onShare: () => _showShareReportSheet(report),
-                      allowLocalPreview: true,
-                    ),
-                    const SizedBox(height: 24),
-                  ],
-                  _buildPreviousReportsSection(
-                    reports: pastReports,
-                    controller: controller,
-                    theme: theme,
+                      const SizedBox(height: 12),
+                      _buildPatientDetailsCard(controller, colorScheme, theme),
+                      const SizedBox(height: 16),
+                      if (controller.error != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 12),
+                          child: Text(
+                            controller.error!,
+                            style: TextStyle(color: colorScheme.error),
+                          ),
+                        ),
+                      if (report != null) ...[
+                        const SizedBox(height: 24),
+                        _buildReportDetailsCard(
+                          report: report,
+                          controller: controller,
+                          theme: theme,
+                          title: 'Current Report',
+                          onExport: _exportCurrentReport,
+                          onShare: () => _showShareReportSheet(report),
+                          allowLocalPreview: true,
+                        ),
+                        const SizedBox(height: 24),
+                      ],
+                      _buildPreviousReportsSection(
+                        reports: pastReports,
+                        controller: controller,
+                        theme: theme,
+                      ),
+                      const SizedBox(height: 20),
+                    ],
                   ),
-                  const SizedBox(height: 20),
-                ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (controller.isSubmitting)
+          Positioned.fill(
+            child: Container(
+              color: Colors.black.withOpacity(0.35),
+              child: Center(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const CircularProgressIndicator(),
+                      const SizedBox(height: 12),
+                      Text(
+                        'Scanning and analyzing…',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: const Color(0xFF0F172A),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
           ),
-        ],
-      ),
+      ],
     );
   }
 
@@ -1209,18 +1261,21 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
             child: SizedBox(
               height: 240,
               width: double.infinity,
-              child: report.imageUrl != null
-                  ? Image.network(
-                      _resolveImageUrl(report.imageUrl!),
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => _previewFallback(),
-                    )
-                  : allowLocalPreview && controller.selectedImages.isNotEmpty
-                  ? Image.file(
-                      File(controller.selectedImages.first.path),
-                      fit: BoxFit.cover,
-                    )
-                  : _previewFallback(),
+              child: InkWell(
+                onTap: () => _openReportPreview(report, controller, allowLocalPreview),
+                child: report.imageUrl != null
+                    ? Image.network(
+                        _resolveImageUrl(report.imageUrl!),
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => _previewFallback(),
+                      )
+                    : allowLocalPreview && controller.selectedImages.isNotEmpty
+                    ? Image.file(
+                        File(controller.selectedImages.first.path),
+                        fit: BoxFit.cover,
+                      )
+                    : _previewFallback(),
+              ),
             ),
           ),
         ],
@@ -1737,6 +1792,80 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
     return imageUrl.startsWith('/')
         ? '$baseUrl$imageUrl'
         : '$baseUrl/$imageUrl';
+  }
+
+  Future<void> _openReportPreview(
+    ReportDetails report,
+    ScannerController controller,
+    bool allowLocalPreview,
+  ) async {
+    final imageUrl = report.imageUrl;
+    if (imageUrl != null && imageUrl.isNotEmpty) {
+      final resolved = _resolveImageUrl(imageUrl);
+      final lower = resolved.toLowerCase();
+      if (lower.endsWith('.pdf')) {
+        await _launchExternal(resolved);
+        return;
+      }
+      _openFullImage(
+        title: 'Report Image',
+        image: Image.network(
+          resolved,
+          fit: BoxFit.contain,
+          errorBuilder: (_, __, ___) => _previewFallback(),
+        ),
+      );
+      return;
+    }
+
+    if (allowLocalPreview && controller.selectedImages.isNotEmpty) {
+      _openFullImage(
+        title: controller.selectedImages.first.name,
+        image: Image.file(
+          File(controller.selectedImages.first.path),
+          fit: BoxFit.contain,
+        ),
+      );
+      return;
+    }
+
+    if (allowLocalPreview && controller.selectedPdf != null) {
+      await _launchExternal(controller.selectedPdf!.path, isLocal: true);
+      return;
+    }
+
+    _showMessage('Preview not available for this report.');
+  }
+
+  void _openFullImage({required String title, required Image image}) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => Scaffold(
+          appBar: AppBar(
+            title: Text(title),
+            backgroundColor: Colors.white,
+            foregroundColor: const Color(0xFF0F172A),
+            elevation: 0,
+          ),
+          backgroundColor: Colors.black,
+          body: Center(
+            child: InteractiveViewer(
+              minScale: 0.8,
+              maxScale: 4,
+              child: image,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _launchExternal(String url, {bool isLocal = false}) async {
+    final uri = isLocal ? Uri.file(url) : Uri.parse(url);
+    final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!launched) {
+      _showMessage('Unable to open the file.');
+    }
   }
 
   Widget _previewFallback() {
