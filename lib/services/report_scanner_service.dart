@@ -26,11 +26,18 @@ class ReportScannerService {
     required String patientId,
     required String filePath,
     required String fileName,
+    String? originalPdfPath,
+    String? originalPdfName,
   }) async {
     try {
       final formData = FormData.fromMap({
         'patientId': patientId,
         'file': await MultipartFile.fromFile(filePath, filename: fileName),
+        if (originalPdfPath != null && originalPdfName != null)
+          'originalPdf': await MultipartFile.fromFile(
+            originalPdfPath,
+            filename: originalPdfName,
+          ),
       });
 
       final uploadResponse = await _client.dio.post<Map<String, dynamic>>(

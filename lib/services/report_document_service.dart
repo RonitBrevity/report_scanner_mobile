@@ -5,6 +5,7 @@ import 'package:image/image.dart' as img;
 import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
+import 'package:pdfx/pdfx.dart' as pdfx;
 
 import '../models/patient.dart';
 import '../models/report_details.dart';
@@ -14,18 +15,30 @@ class PreparedUploadDocument {
   const PreparedUploadDocument({
     required this.fileName,
     required this.filePath,
+    this.originalPdfName,
+    this.originalPdfPath,
   });
 
   final String fileName;
   final String filePath;
+  final String? originalPdfName;
+  final String? originalPdfPath;
 }
 
 class ReportDocumentService {
+  static const int _maxPdfPages = 3;
+  static const int _pdfMaxDimension = 1800;
+  static const int _jpgQuality = 85;
+
   Future<PreparedUploadDocument> prepareForUpload({
     required List<XFile> images,
     SelectedUploadFile? pdfFile,
   }) async {
     if (pdfFile != null) {
+      final converted = await _convertPdfToJpg(pdfFile.path);
+      if (converted != null) {
+        return converted;
+      }
       return PreparedUploadDocument(
         fileName: pdfFile.name,
         filePath: pdfFile.path,
@@ -46,14 +59,10 @@ class ReportDocumentService {
     final tempDirectory = await getTemporaryDirectory();
     final stitchedImage = await _stitchImages(images);
     if (stitchedImage != null) {
-      final jpgBytes = img.encodeJpg(stitchedImage, quality: 85);
-      final file = File(
-        '${tempDirectory.path}${Platform.pathSeparator}multi_report_${DateTime.now().millisecondsSinceEpoch}.jpg',
-      );
-      await file.writeAsBytes(jpgBytes);
-      return PreparedUploadDocument(
-        fileName: file.uri.pathSegments.last,
-        filePath: file.path,
+      return _saveJpg(
+        stitchedImage,
+        tempDirectory,
+        'multi_report_${DateTime.now().millisecondsSinceEpoch}',
       );
     }
 
@@ -199,6 +208,10 @@ class ReportDocumentService {
       decodedImages.add(decoded);
     }
 
+    return _stitchDecodedImages(decodedImages);
+  }
+
+  img.Image? _stitchDecodedImages(List<img.Image> decodedImages) {
     if (decodedImages.isEmpty) {
       return null;
     }
@@ -217,5 +230,84 @@ class ReportDocumentService {
     }
 
     return canvas;
+  }
+
+  Future<PreparedUploadDocument> _saveJpg(
+    img.Image image,
+    Directory tempDirectory,
+    String baseName,
+  ) async {
+    final jpgBytes = img.encodeJpg(image, quality: _jpgQuality);
+    final file = File(
+      '${tempDirectory.path}${Platform.pathSeparator}$baseName.jpg',
+    );
+    await file.writeAsBytes(jpgBytes);
+    return PreparedUploadDocument(
+      fileName: file.uri.pathSegments.last,
+      filePath: file.path,
+    );
+  }
+
+  Future<PreparedUploadDocument?> _convertPdfToJpg(String pdfPath) async {
+    try {
+      final document = await pdfx.PdfDocument.openFile(pdfPath);
+      final pagesToRender = document.pagesCount < _maxPdfPages
+          ? document.pagesCount
+          : _maxPdfPages;
+      final renderedImages = <img.Image>[];
+
+      for (var pageIndex = 1; pageIndex <= pagesToRender; pageIndex++) {
+        final page = await document.getPage(pageIndex);
+        final target = _scaleToMax(
+          page.width,
+          page.height,
+          _pdfMaxDimension,
+        );
+        final pageImage = await page.render(
+          width: target.$1.toDouble(),
+          height: target.$2.toDouble(),
+          format: pdfx.PdfPageImageFormat.png,
+        );
+        await page.close();
+        if (pageImage == null || pageImage.bytes.isEmpty) {
+          continue;
+        }
+        final decoded = img.decodeImage(pageImage.bytes);
+        if (decoded != null) {
+          renderedImages.add(decoded);
+        }
+      }
+
+      await document.close();
+
+      if (renderedImages.isEmpty) {
+        return null;
+      }
+
+      final stitched = _stitchDecodedImages(renderedImages) ?? renderedImages.first;
+      final tempDirectory = await getTemporaryDirectory();
+      final prepared = await _saveJpg(
+        stitched,
+        tempDirectory,
+        'pdf_report_${DateTime.now().millisecondsSinceEpoch}',
+      );
+      return PreparedUploadDocument(
+        fileName: prepared.fileName,
+        filePath: prepared.filePath,
+        originalPdfName: File(pdfPath).uri.pathSegments.last,
+        originalPdfPath: pdfPath,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  (int, int) _scaleToMax(double width, double height, int maxDimension) {
+    final maxSide = width > height ? width : height;
+    if (maxSide <= maxDimension) {
+      return (width.round(), height.round());
+    }
+    final scale = maxDimension / maxSide;
+    return ((width * scale).round(), (height * scale).round());
   }
 }

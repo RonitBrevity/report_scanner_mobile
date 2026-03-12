@@ -165,6 +165,8 @@ class ScannerController extends ChangeNotifier {
         patientId: _selectedPatient!.patientId,
         filePath: preparedUpload.filePath,
         fileName: preparedUpload.fileName,
+        originalPdfPath: preparedUpload.originalPdfPath,
+        originalPdfName: preparedUpload.originalPdfName,
       );
       await loadInitialPastReports(notifyAtStart: false);
     } on ApiException catch (e) {

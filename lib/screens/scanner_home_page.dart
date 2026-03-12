@@ -1342,38 +1342,49 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
             ],
           ),
           const SizedBox(height: 12),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                '${test.value}',
-                style: theme.textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w900,
-                  color: const Color(0xFF0F172A),
-                ),
-              ),
-              const SizedBox(width: 4),
-              Padding(
-                padding: const EdgeInsets.only(bottom: 4),
-                child: Text(
-                  widget.controller.availableTests.contains(test.testName) 
-                    ? widget.controller.getHistoryForTest(test.testName).last.unit
-                    : '', 
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: const Color(0xFF64748B),
-                    fontWeight: FontWeight.w600,
+          Builder(
+            builder: (context) {
+              final unit = widget.controller.availableTests.contains(test.testName)
+                  ? widget.controller.getHistoryForTest(test.testName).last.unit
+                  : '';
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Wrap(
+                    crossAxisAlignment: WrapCrossAlignment.end,
+                    spacing: 4,
+                    children: [
+                      Text(
+                        '${test.value}',
+                        style: theme.textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.w900,
+                          color: const Color(0xFF0F172A),
+                        ),
+                      ),
+                      if (unit.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 4),
+                          child: Text(
+                            unit,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: const Color(0xFF64748B),
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
-                ),
-              ),
-              const Spacer(),
-              Text(
-                'Range: ${test.rangeMin} - ${test.rangeMax}',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: const Color(0xFF64748B),
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
+                  const SizedBox(height: 4),
+                  Text(
+                    'Range: ${_formatRangeValue(test.rangeMin)} - ${_formatRangeValue(test.rangeMax)}',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: const Color(0xFF64748B),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              );
+            },
           ),
           const SizedBox(height: 12),
           _buildRangeIndicator(test, accentColor),
@@ -1783,15 +1794,26 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
     return '${months[date.month - 1]} ${date.day}, ${date.year}';
   }
 
-  String _resolveImageUrl(String imageUrl) {
-    if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
-      return imageUrl;
+  String _formatRangeValue(num? value) {
+    if (value == null) return 'N/A';
+    final asDouble = value.toDouble();
+    if (asDouble % 1 == 0) {
+      return asDouble.toStringAsFixed(0);
+    }
+    return asDouble.toStringAsFixed(1);
+  }
+
+  String _resolveImageUrl(String imageUrl) => _resolveFileUrl(imageUrl);
+
+  String _resolveFileUrl(String fileUrl) {
+    if (fileUrl.startsWith('http://') || fileUrl.startsWith('https://')) {
+      return fileUrl;
     }
 
     final baseUrl = widget.controller.baseUrl;
-    return imageUrl.startsWith('/')
-        ? '$baseUrl$imageUrl'
-        : '$baseUrl/$imageUrl';
+    return fileUrl.startsWith('/')
+        ? '$baseUrl$fileUrl'
+        : '$baseUrl/$fileUrl';
   }
 
   Future<void> _openReportPreview(
@@ -1799,11 +1821,16 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
     ScannerController controller,
     bool allowLocalPreview,
   ) async {
+    final pdfUrl = report.pdfUrl;
+    if (pdfUrl != null && pdfUrl.isNotEmpty) {
+      await _launchExternal(_resolveFileUrl(pdfUrl));
+      return;
+    }
+
     final imageUrl = report.imageUrl;
     if (imageUrl != null && imageUrl.isNotEmpty) {
-      final resolved = _resolveImageUrl(imageUrl);
-      final lower = resolved.toLowerCase();
-      if (lower.endsWith('.pdf')) {
+      final resolved = _resolveFileUrl(imageUrl);
+      if (resolved.toLowerCase().endsWith('.pdf')) {
         await _launchExternal(resolved);
         return;
       }

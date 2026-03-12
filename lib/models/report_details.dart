@@ -3,6 +3,7 @@ class ReportDetails {
   final String patientId;
   final DateTime uploadDateUtc;
   final String? imageUrl;
+  final String? pdfUrl;
   final String rawText;
   final String? riskLevel;
   final String? summary;
@@ -14,6 +15,7 @@ class ReportDetails {
     required this.patientId,
     required this.uploadDateUtc,
     required this.imageUrl,
+    required this.pdfUrl,
     required this.rawText,
     required this.riskLevel,
     required this.summary,
@@ -26,6 +28,7 @@ class ReportDetails {
         patientId: json['patientId'] as String,
         uploadDateUtc: DateTime.parse(json['uploadDateUtc'] as String),
         imageUrl: json['imageUrl'] as String?,
+        pdfUrl: json['pdfUrl'] as String?,
         rawText: (json['rawText'] as String?) ?? '',
         riskLevel: json['riskLevel'] as String?,
         summary: json['summary'] as String?,
