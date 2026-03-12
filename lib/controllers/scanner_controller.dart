@@ -126,13 +126,13 @@ class ScannerController extends ChangeNotifier {
     if (_selectedImages.isNotEmpty) {
       _selectedPdf = null;
     }
-    _resetReportState(notify: false);
+    _resetReportState(notify: false, clearPastReports: false);
     notifyListeners();
   }
 
   void removeSelectedImage(XFile image) {
     _selectedImages = _selectedImages.where((item) => item.path != image.path).toList();
-    _resetReportState(notify: false);
+    _resetReportState(notify: false, clearPastReports: false);
     notifyListeners();
   }
 
@@ -141,7 +141,7 @@ class ScannerController extends ChangeNotifier {
     if (pdf != null) {
       _selectedImages = <XFile>[];
     }
-    _resetReportState(notify: false);
+    _resetReportState(notify: false, clearPastReports: false);
     notifyListeners();
   }
 
@@ -444,13 +444,15 @@ class ScannerController extends ChangeNotifier {
     }
   }
 
-  void _resetReportState({bool notify = true}) {
+  void _resetReportState({bool notify = true, bool clearPastReports = true}) {
     _report = null;
     _error = null;
-    _pastReports.clear();
-    _isLoadingPastReports = false;
-    _hasMorePastReports = false;
-    _pastReportsRequested = 0;
+    if (clearPastReports) {
+      _pastReports.clear();
+      _isLoadingPastReports = false;
+      _hasMorePastReports = false;
+      _pastReportsRequested = 0;
+    }
 
     if (notify) {
       notifyListeners();

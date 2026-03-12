@@ -82,6 +82,8 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
     }
 
     widget.controller.setSelectedImages(<XFile>[...currentImages, image]);
+    _goToReportsTab();
+    _scrollToTop();
   }
 
   Future<void> _pickGalleryImages() async {
@@ -99,6 +101,8 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
     }
 
     widget.controller.setSelectedImages(images.take(4).toList());
+    _goToReportsTab();
+    _scrollToTop();
   }
 
   Future<void> _pickPdf() async {
@@ -121,6 +125,8 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
     widget.controller.setSelectedPdf(
       SelectedUploadFile(name: file.name, path: path, extension: 'pdf'),
     );
+    _goToReportsTab();
+    _scrollToTop();
   }
 
   Future<void> _exportCurrentReport() async {
@@ -514,6 +520,23 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
       ..showSnackBar(SnackBar(content: Text(message)));
   }
 
+  void _goToReportsTab() {
+    final controller = DefaultTabController.of(context);
+    if (controller != null && controller.index != 0) {
+      controller.animateTo(0);
+    }
+  }
+
+  void _scrollToTop() {
+    if (_scrollController.hasClients) {
+      _scrollController.animateTo(
+        0,
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOut,
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -722,6 +745,7 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
 
   Widget _buildAnalysisTab(ScannerController controller, ColorScheme colorScheme, ThemeData theme) {
     return _AnalysisTabView(
+      key: ValueKey(controller.selectedPatient?.patientId ?? 'no-patient'),
       controller: controller,
       onSelectPatient: () => _showPatientSelection(controller),
       onShareReport: (report) => _showShareReportSheet(report),
@@ -2039,6 +2063,7 @@ class _AnalysisTabView extends StatefulWidget {
   final void Function(String) onShowMessage;
 
   const _AnalysisTabView({
+    super.key,
     required this.controller,
     required this.onSelectPatient,
     required this.onShareReport,
