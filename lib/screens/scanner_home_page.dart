@@ -1933,6 +1933,22 @@ class _AnalysisTabViewState extends State<_AnalysisTabView> {
     'ldl': 'Lipid Profile',
     'triglycerides': 'Lipid Profile',
   };
+  static const List<String> _basicTests = [
+    'Hemoglobin',
+    'WBC',
+    'RBC',
+    'Platelet Count',
+    'Glucose',
+    'HbA1c',
+    'Creatinine',
+    'Urea',
+    'Sodium',
+    'Potassium',
+    'ALT',
+    'AST',
+    'Cholesterol',
+    'Triglycerides',
+  ];
 
   @override
   void initState() {
@@ -1945,7 +1961,9 @@ class _AnalysisTabViewState extends State<_AnalysisTabView> {
   @override
   Widget build(BuildContext context) {
     final availableTests = widget.controller.availableTests;
-    final grouped = _groupTests(availableTests);
+    final hasTrendData = availableTests.isNotEmpty;
+    final testsToShow = hasTrendData ? availableTests : _basicTests;
+    final grouped = _groupTests(testsToShow);
     final allGroupedTests = grouped.values.expand((e) => e).toList();
     if (_selectedTest == null && allGroupedTests.isNotEmpty) {
       _selectedTest = allGroupedTests.first;
@@ -1971,12 +1989,33 @@ class _AnalysisTabViewState extends State<_AnalysisTabView> {
               ),
             ),
           ),
-          if (availableTests.isEmpty || grouped.isEmpty)
+          if (grouped.isEmpty)
             SliverFillRemaining(
               hasScrollBody: false,
               child: _buildEmptyState(theme),
             )
           else ...[
+            if (!hasTrendData)
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                  child: Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF1F8F7),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFFD1E7E4)),
+                    ),
+                    child: Text(
+                      'No trend data yet. Showing basic tests so you can see the layout.',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: const Color(0xFF0B6F66),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             SliverPersistentHeader(
               pinned: true,
               delegate: _TimeFilterHeader(
