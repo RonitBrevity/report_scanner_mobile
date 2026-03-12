@@ -20,6 +20,8 @@ enum _DateFilter { newestFirst, oldestFirst }
 
 enum _TypeFilter { all, highRisk, review, normal }
 
+enum _RangeFilter { all, last7, last30, last90, last180, last365 }
+
 class ScannerHomePage extends StatefulWidget {
   const ScannerHomePage({super.key, required this.controller});
 
@@ -33,8 +35,12 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
   final ImagePicker _picker = ImagePicker();
   final ScrollController _scrollController = ScrollController();
   final TextEditingController _patientSearchController = TextEditingController();
+  BuildContext? _tabControllerContext;
   _DateFilter _dateFilter = _DateFilter.newestFirst;
   _TypeFilter _typeFilter = _TypeFilter.all;
+  _RangeFilter _rangeFilter = _RangeFilter.all;
+  bool _abnormalOnly = false;
+  String _testTypeFilter = 'All';
   String _patientSearchQuery = '';
 
   @override
@@ -510,6 +516,110 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
     );
   }
 
+  void _showSmartFilterSheet() {
+    final options = <(_RangeFilter, String)>[
+      (_RangeFilter.all, 'All time'),
+      (_RangeFilter.last7, 'Last 7 days'),
+      (_RangeFilter.last30, 'Last 30 days'),
+      (_RangeFilter.last90, 'Last 3 months'),
+      (_RangeFilter.last180, 'Last 6 months'),
+      (_RangeFilter.last365, 'Last 1 year'),
+    ];
+    final categories = _availableReportCategories();
+
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => SafeArea(
+        child: FractionallySizedBox(
+          heightFactor: 0.85,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Smart filters',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                ),
+                const SizedBox(height: 16),
+                const Text('Date range', style: TextStyle(fontWeight: FontWeight.w700)),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: options.map((entry) {
+                    final active = _rangeFilter == entry.$1;
+                    return ChoiceChip(
+                      label: Text(entry.$2),
+                      selected: active,
+                      onSelected: (_) => setState(() => _rangeFilter = entry.$1),
+                      selectedColor: const Color(0xFF0F766E).withOpacity(0.15),
+                      labelStyle: TextStyle(
+                        color: active ? const Color(0xFF0F766E) : const Color(0xFF1F2937),
+                        fontWeight: FontWeight.w700,
+                      ),
+                      side: const BorderSide(color: Color(0xFFD1E7E4)),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    const Text('Abnormal only', style: TextStyle(fontWeight: FontWeight.w700)),
+                    const Spacer(),
+                    Switch(
+                      value: _abnormalOnly,
+                      onChanged: (value) => setState(() => _abnormalOnly = value),
+                      activeColor: const Color(0xFF0F766E),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                const Text('Test type', style: TextStyle(fontWeight: FontWeight.w700)),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: categories.map((category) {
+                    final active = _testTypeFilter == category;
+                    return ChoiceChip(
+                      label: Text(category),
+                      selected: active,
+                      onSelected: (_) => setState(() => _testTypeFilter = category),
+                      selectedColor: const Color(0xFF0F766E).withOpacity(0.15),
+                      labelStyle: TextStyle(
+                        color: active ? const Color(0xFF0F766E) : const Color(0xFF1F2937),
+                        fontWeight: FontWeight.w700,
+                      ),
+                      side: const BorderSide(color: Color(0xFFD1E7E4)),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 12),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: () {
+                      setState(() {
+                        _rangeFilter = _RangeFilter.all;
+                        _abnormalOnly = false;
+                        _testTypeFilter = 'All';
+                      });
+                    },
+                    child: const Text('Reset'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   void _showMessage(String message) {
     if (!mounted) {
       return;
@@ -521,7 +631,9 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
   }
 
   void _goToReportsTab() {
-    final controller = DefaultTabController.of(context);
+    final controller = _tabControllerContext == null
+        ? null
+        : DefaultTabController.of(_tabControllerContext!);
     if (controller != null && controller.index != 0) {
       controller.animateTo(0);
     }
@@ -551,7 +663,10 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
 
         return DefaultTabController(
           length: 2,
-          child: Scaffold(
+          child: Builder(
+            builder: (tabContext) {
+              _tabControllerContext = tabContext;
+              return Scaffold(
             backgroundColor: const Color(0xFFF8FBFB),
             appBar: AppBar(
               backgroundColor: Colors.white,
@@ -645,6 +760,8 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
                 _buildAnalysisTab(controller, colorScheme, theme),
               ],
             ),
+              );
+            },
           ),
         );
       },
@@ -1563,6 +1680,12 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
                   label: 'Type',
                   onTap: _showTypeFilterSheet,
                 ),
+                const SizedBox(width: 6),
+                _CompactFilterButton(
+                  icon: Icons.tune_rounded,
+                  label: 'Smart',
+                  onTap: _showSmartFilterSheet,
+                ),
               ],
             ),
           ],
@@ -1716,12 +1839,20 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
       }
     }).toList();
 
-    filtered.sort((left, right) {
+    final dateFiltered = _applyDateRangeFilter(filtered);
+    final abnormalFiltered = _abnormalOnly
+        ? dateFiltered.where(_reportHasAbnormal).toList()
+        : dateFiltered;
+    final categoryFiltered = _testTypeFilter == 'All'
+        ? abnormalFiltered
+        : abnormalFiltered.where((report) => _reportCategory(report) == _testTypeFilter).toList();
+
+    categoryFiltered.sort((left, right) {
       final comparison = left.uploadDateUtc.compareTo(right.uploadDateUtc);
       return _dateFilter == _DateFilter.newestFirst ? -comparison : comparison;
     });
 
-    return filtered;
+    return categoryFiltered;
   }
 
   Widget _statusPill(ReportDetails report) {
@@ -1786,6 +1917,67 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
       return 'Full Blood Count';
     }
     return 'Lab Report';
+  }
+
+  List<String> _availableReportCategories() {
+    return const [
+      'All',
+      'Complete Blood Count',
+      'Glucose & HbA1c',
+      'Kidney Function',
+      'Electrolytes',
+      'Liver Function',
+      'Lipid Profile',
+      'Thyroid Profile',
+      'Other',
+    ];
+  }
+
+  bool _reportHasAbnormal(ReportDetails report) {
+    return report.tests.any((test) {
+      final status = test.status.toLowerCase();
+      return status != 'normal' && status != 'optimal';
+    });
+  }
+
+  String _reportCategory(ReportDetails report) {
+    final names = report.tests.map((test) => test.testName.toLowerCase()).toList();
+    if (names.any((name) => name.contains('cholesterol') || name.contains('triglyceride'))) {
+      return 'Lipid Profile';
+    }
+    if (names.any((name) => name.contains('thyroid') || name.contains('tsh'))) {
+      return 'Thyroid Profile';
+    }
+    if (names.any((name) => name.contains('glucose') || name.contains('sugar') || name.contains('hba1c'))) {
+      return 'Glucose & HbA1c';
+    }
+    if (names.any((name) => name.contains('creatinine') || name.contains('urea') || name.contains('bun'))) {
+      return 'Kidney Function';
+    }
+    if (names.any((name) => name.contains('sodium') || name.contains('potassium') || name.contains('chloride'))) {
+      return 'Electrolytes';
+    }
+    if (names.any((name) => name.contains('alt') || name.contains('ast') || name.contains('alp') || name.contains('bilirubin'))) {
+      return 'Liver Function';
+    }
+    if (names.any((name) => name.contains('wbc') || name.contains('rbc') || name.contains('hemoglobin') || name.contains('platelet'))) {
+      return 'Complete Blood Count';
+    }
+    return 'Other';
+  }
+
+  List<ReportDetails> _applyDateRangeFilter(List<ReportDetails> reports) {
+    if (_rangeFilter == _RangeFilter.all) return reports;
+    final now = DateTime.now().toUtc();
+    final cutoff = switch (_rangeFilter) {
+      _RangeFilter.last7 => now.subtract(const Duration(days: 7)),
+      _RangeFilter.last30 => now.subtract(const Duration(days: 30)),
+      _RangeFilter.last90 => now.subtract(const Duration(days: 90)),
+      _RangeFilter.last180 => now.subtract(const Duration(days: 180)),
+      _RangeFilter.last365 => now.subtract(const Duration(days: 365)),
+      _RangeFilter.all => now,
+    };
+    return reports.where((report) => report.uploadDateUtc.isAfter(cutoff)).toList();
   }
 
   String _reportSubtitle(ReportDetails report) {
