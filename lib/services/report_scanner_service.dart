@@ -160,6 +160,15 @@ class ReportScannerService {
     try {
       await _client.dio.delete('/api/patients/$patientId');
     } on DioException catch (e) {
+      final status = e.response?.statusCode;
+      if (status == 405) {
+        try {
+          await _client.dio.post('/api/patients/$patientId/delete');
+          return;
+        } on DioException catch (postError) {
+          throw ApiException.fromDioException(postError, fallback: 'Failed to delete patient.');
+        }
+      }
       throw ApiException.fromDioException(e, fallback: 'Failed to delete patient.');
     }
   }
