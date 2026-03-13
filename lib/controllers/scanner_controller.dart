@@ -169,6 +169,10 @@ class ScannerController extends ChangeNotifier {
         originalPdfName: preparedUpload.originalPdfName,
       );
       await loadInitialPastReports(notifyAtStart: false);
+
+      // Reset the selection UI after a successful scan.
+      _selectedImages = <XFile>[];
+      _selectedPdf = null;
     } on ApiException catch (e) {
       _error = e.message;
     } catch (_) {

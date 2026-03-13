@@ -50,11 +50,6 @@ class ReportScannerService {
         throw ApiException('Upload completed but report ID was missing.');
       }
 
-      await _client.dio.post<Map<String, dynamic>>(
-        '/api/reports/analyze',
-        data: {'reportId': reportId},
-      );
-
       final reportResponse = await _client.dio.get<Map<String, dynamic>>(
         '/api/reports/$reportId',
       );
