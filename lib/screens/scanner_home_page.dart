@@ -19,6 +19,7 @@ import '../models/selected_upload_file.dart';
 import '../services/api_client.dart';
 import 'profile_page.dart';
 import 'shared_link_access_page.dart';
+import 'edit_patient_page.dart';
 
 enum _DateFilter { newestFirst, oldestFirst }
 
@@ -223,11 +224,24 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
 
   Future<void> _exportCurrentReport() async {
     try {
-      final path = await widget.controller.exportCurrentReportPdf();
-      final savedPath = await _savePdfToDevice(path, 'healthscan_current_report');
-      _showMessage(savedPath == null
-          ? 'Download canceled.'
-          : 'Current report saved to $savedPath');
+      final report = widget.controller.report;
+      if (report == null) {
+        _showMessage('Current report is not available.');
+        return;
+      }
+
+      final baseName = _pdfBaseName(widget.controller, report);
+      final savedPath = await _downloadOrExportReportPdf(
+        controller: widget.controller,
+        report: report,
+        fallbackExport: () => widget.controller.exportCurrentReportPdf(),
+        baseNameOverride: baseName,
+      );
+      _showMessage(_formatSaveMessage(
+        kind: 'Current report',
+        savedPath: savedPath,
+        fallbackFileName: '$baseName.pdf',
+      ));
     } catch (error) {
       _showMessage(error.toString());
     }
@@ -235,14 +249,89 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
 
   Future<void> _exportPastReport(ReportDetails report) async {
     try {
-      final path = await widget.controller.exportPastReportPdf(report);
-      final savedPath = await _savePdfToDevice(path, 'healthscan_${report.reportId}');
-      _showMessage(savedPath == null
-          ? 'Download canceled.'
-          : 'Past report saved to $savedPath');
+      final baseName = _pdfBaseName(widget.controller, report);
+      final savedPath = await _downloadOrExportReportPdf(
+        controller: widget.controller,
+        report: report,
+        fallbackExport: () => widget.controller.exportPastReportPdf(report),
+        baseNameOverride: baseName,
+      );
+      _showMessage(_formatSaveMessage(
+        kind: 'Past report',
+        savedPath: savedPath,
+        fallbackFileName: '$baseName.pdf',
+      ));
     } catch (error) {
       _showMessage(error.toString());
     }
+  }
+
+  Future<String?> _downloadOrExportReportPdf({
+    required ScannerController controller,
+    required ReportDetails report,
+    required Future<String> Function() fallbackExport,
+    String? baseNameOverride,
+  }) async {
+    final baseName = baseNameOverride ?? _pdfBaseName(controller, report);
+
+    if (report.pdfUrl != null && report.pdfUrl!.trim().isNotEmpty) {
+      try {
+        final url = _resolveFileUrl(report.pdfUrl!.trim());
+        final response = await Dio().get<List<int>>(
+          url,
+          options: Options(responseType: ResponseType.bytes),
+        );
+        final bytes = Uint8List.fromList(response.data ?? <int>[]);
+        if (bytes.isNotEmpty) {
+          return FileSaver.instance.saveFile(
+            name: baseName,
+            bytes: bytes,
+            ext: 'pdf',
+            mimeType: MimeType.pdf,
+          );
+        }
+      } catch (_) {
+        // Fall back to exported PDF below.
+      }
+    }
+
+    final path = await fallbackExport();
+    return _savePdfToDevice(path, baseName);
+  }
+
+  String _formatSaveMessage({
+    required String kind,
+    required String? savedPath,
+    required String fallbackFileName,
+  }) {
+    if (savedPath == null) {
+      return 'Download canceled.';
+    }
+
+    final fileName = _fileNameFromPath(savedPath) ?? fallbackFileName;
+    if (Platform.isAndroid) {
+      return '$kind saved: $fileName';
+    }
+
+    return '$kind exported: $fileName';
+  }
+
+  String? _fileNameFromPath(String path) {
+    final trimmed = path.trim();
+    if (trimmed.isEmpty) return null;
+    final parts = trimmed.split(RegExp(r'[\\\\/]+'));
+    if (parts.isEmpty) return null;
+    final last = parts.last.trim();
+    return last.isEmpty ? null : last;
+  }
+
+  String _pdfBaseName(ScannerController controller, ReportDetails report) {
+    final patient = controller.selectedPatient;
+    final code = patient != null && patient.patientId == report.patientId
+        ? patient.patientCode.toString()
+        : report.patientId.replaceAll('-', '').substring(0, 8);
+    final date = DateFormat('yyyyMMdd').format(report.uploadDateUtc.toLocal());
+    return 'healthscan_${code}_$date';
   }
 
   Future<String?> _savePdfToDevice(String path, String baseName) async {
@@ -612,93 +701,108 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
       (_RangeFilter.last365, 'Last 1 year'),
     ];
     final categories = _availableReportCategories();
+    var localRangeFilter = _rangeFilter;
+    var localAbnormalOnly = _abnormalOnly;
+    var localTestType = _testTypeFilter;
 
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      builder: (_) => SafeArea(
-        child: FractionallySizedBox(
-          heightFactor: 0.85,
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Smart filters',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
+      builder: (_) => StatefulBuilder(
+        builder: (context, setModalState) => SafeArea(
+          child: FractionallySizedBox(
+            heightFactor: 0.85,
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Smart filters',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text('Date range', style: TextStyle(fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: options.map((entry) {
+                      final active = localRangeFilter == entry.$1;
+                      return ChoiceChip(
+                        label: Text(entry.$2),
+                        selected: active,
+                        onSelected: (_) => setModalState(() {
+                          localRangeFilter = entry.$1;
+                          _rangeFilter = entry.$1;
+                        }),
+                        selectedColor: const Color(0xFF0F766E).withOpacity(0.15),
+                        labelStyle: TextStyle(
+                          color: active ? const Color(0xFF0F766E) : const Color(0xFF1F2937),
+                          fontWeight: FontWeight.w700,
+                        ),
+                        side: const BorderSide(color: Color(0xFFD1E7E4)),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      const Text('Abnormal only', style: TextStyle(fontWeight: FontWeight.w700)),
+                      const Spacer(),
+                      Switch(
+                        value: localAbnormalOnly,
+                        onChanged: (value) => setModalState(() {
+                          localAbnormalOnly = value;
+                          _abnormalOnly = value;
+                        }),
+                        activeColor: const Color(0xFF0F766E),
                       ),
-                ),
-                const SizedBox(height: 16),
-                const Text('Date range', style: TextStyle(fontWeight: FontWeight.w700)),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: options.map((entry) {
-                    final active = _rangeFilter == entry.$1;
-                    return ChoiceChip(
-                      label: Text(entry.$2),
-                      selected: active,
-                      onSelected: (_) => setState(() => _rangeFilter = entry.$1),
-                      selectedColor: const Color(0xFF0F766E).withOpacity(0.15),
-                      labelStyle: TextStyle(
-                        color: active ? const Color(0xFF0F766E) : const Color(0xFF1F2937),
-                        fontWeight: FontWeight.w700,
-                      ),
-                      side: const BorderSide(color: Color(0xFFD1E7E4)),
-                    );
-                  }).toList(),
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    const Text('Abnormal only', style: TextStyle(fontWeight: FontWeight.w700)),
-                    const Spacer(),
-                    Switch(
-                      value: _abnormalOnly,
-                      onChanged: (value) => setState(() => _abnormalOnly = value),
-                      activeColor: const Color(0xFF0F766E),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                const Text('Test type', style: TextStyle(fontWeight: FontWeight.w700)),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: categories.map((category) {
-                    final active = _testTypeFilter == category;
-                    return ChoiceChip(
-                      label: Text(category),
-                      selected: active,
-                      onSelected: (_) => setState(() => _testTypeFilter = category),
-                      selectedColor: const Color(0xFF0F766E).withOpacity(0.15),
-                      labelStyle: TextStyle(
-                        color: active ? const Color(0xFF0F766E) : const Color(0xFF1F2937),
-                        fontWeight: FontWeight.w700,
-                      ),
-                      side: const BorderSide(color: Color(0xFFD1E7E4)),
-                    );
-                  }).toList(),
-                ),
-                const SizedBox(height: 12),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton(
-                    onPressed: () {
-                      setState(() {
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  const Text('Test type', style: TextStyle(fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: categories.map((category) {
+                      final active = localTestType == category;
+                      return ChoiceChip(
+                        label: Text(category),
+                        selected: active,
+                        onSelected: (_) => setModalState(() {
+                          localTestType = category;
+                          _testTypeFilter = category;
+                        }),
+                        selectedColor: const Color(0xFF0F766E).withOpacity(0.15),
+                        labelStyle: TextStyle(
+                          color: active ? const Color(0xFF0F766E) : const Color(0xFF1F2937),
+                          fontWeight: FontWeight.w700,
+                        ),
+                        side: const BorderSide(color: Color(0xFFD1E7E4)),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 12),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: () => setModalState(() {
+                        localRangeFilter = _RangeFilter.all;
+                        localAbnormalOnly = false;
+                        localTestType = 'All';
                         _rangeFilter = _RangeFilter.all;
                         _abnormalOnly = false;
                         _testTypeFilter = 'All';
-                      });
-                    },
-                    child: const Text('Reset'),
+                      }),
+                      child: const Text('Reset'),
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
@@ -752,14 +856,16 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
           child: Builder(
             builder: (tabContext) {
               _tabControllerContext = tabContext;
-              return Scaffold(
-            backgroundColor: const Color(0xFFF8FBFB),
-            appBar: AppBar(
-              backgroundColor: Colors.white,
-              elevation: 0,
-              title: Text(
-                'HealthScan AI',
-                style: theme.textTheme.headlineSmall?.copyWith(
+              return Stack(
+                children: [
+                  Scaffold(
+                    backgroundColor: const Color(0xFFF8FBFB),
+                    appBar: AppBar(
+                      backgroundColor: Colors.white,
+                      elevation: 0,
+                      title: Text(
+                        'HealthScan AI',
+                        style: theme.textTheme.headlineSmall?.copyWith(
                   fontWeight: FontWeight.w800,
                   color: const Color(0xFF0F766E),
                 ),
@@ -846,6 +952,27 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
                 _buildAnalysisTab(controller, colorScheme, theme),
               ],
             ),
+                  ),
+                  if (controller.isLoadingPatients)
+                    Positioned.fill(
+                      child: Container(
+                        color: Colors.black.withOpacity(0.15),
+                        alignment: Alignment.center,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: const SizedBox(
+                            width: 26,
+                            height: 26,
+                            child: CircularProgressIndicator(strokeWidth: 2.6),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
               );
             },
           ),
@@ -959,7 +1086,7 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
   Widget _buildPatientCard(ScannerController controller, ColorScheme colorScheme, ThemeData theme) {
     final selectedPatient = controller.selectedPatient;
     final subtitle = selectedPatient != null
-        ? '${selectedPatient.name} (ID: ${selectedPatient.patientId})'
+        ? '${selectedPatient.name} (Code: ${selectedPatient.patientCode})'
         : 'No patient selected';
 
     return InkWell(
@@ -1023,13 +1150,13 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
             final patients = query.isEmpty
                 ? controller.patients
                 : controller.patients.where((patient) {
-                    final name = patient.name.toLowerCase();
-                    final gender = patient.gender.toLowerCase();
-                    final id = patient.patientId.toLowerCase();
-                    return name.contains(query) ||
-                        gender.contains(query) ||
-                        id.contains(query);
-                  }).toList();
+                  final name = patient.name.toLowerCase();
+                  final gender = patient.gender.toLowerCase();
+                  final code = patient.patientCode.toString();
+                  return name.contains(query) ||
+                      gender.contains(query) ||
+                      code.contains(query);
+                }).toList();
 
             return DraggableScrollableSheet(
               initialChildSize: 0.7,
@@ -1072,12 +1199,12 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
                           onChanged: (value) => setModalState(
                             () => _patientSearchQuery = value,
                           ),
-                          decoration: InputDecoration(
-                            hintText: 'Search by name, gender, or ID',
-                            prefixIcon: const Icon(Icons.search),
-                            filled: true,
-                            fillColor: const Color(0xFFF1F5F9),
-                            border: OutlineInputBorder(
+                  decoration: InputDecoration(
+                    hintText: 'Search by name, gender, or code',
+                    prefixIcon: const Icon(Icons.search),
+                    filled: true,
+                    fillColor: const Color(0xFFF1F5F9),
+                    border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(14),
                               borderSide: BorderSide.none,
                             ),
@@ -1115,20 +1242,80 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
                                   color: const Color(0xFF0F172A),
                                 ),
                               ),
-                              subtitle: Text(
-                                '${patient.gender}, ${patient.age}y (ID: ${patient.patientId})',
-                                style: const TextStyle(fontSize: 12),
+                      subtitle: Text(
+                        '${patient.gender}, ${patient.age}y (Code: ${patient.patientCode})',
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (isSelected)
+                            const Padding(
+                              padding: EdgeInsets.only(right: 6),
+                              child: Icon(
+                                Icons.check_circle,
+                                color: Color(0xFF0B6F66),
                               ),
-                              trailing: isSelected
-                                  ? const Icon(
-                                      Icons.check_circle,
-                                      color: Color(0xFF0B6F66),
-                                    )
-                                  : null,
-                              onTap: () {
-                                controller.setSelectedPatient(patient);
-                                Navigator.pop(context);
-                              },
+                            ),
+                          PopupMenuButton<String>(
+                            onSelected: (value) async {
+                              if (value == 'edit') {
+                                final updated = await Navigator.of(context).push<Patient?>(
+                                  MaterialPageRoute(
+                                    builder: (_) => EditPatientPage(
+                                      controller: controller,
+                                      patient: patient,
+                                    ),
+                                  ),
+                                );
+                                if (updated != null) {
+                                  setModalState(() {});
+                                }
+                                return;
+                              }
+                              if (value == 'delete') {
+                                final ok = await showDialog<bool>(
+                                  context: context,
+                                  builder: (dialogContext) => AlertDialog(
+                                    title: const Text('Delete patient?'),
+                                    content: Text(
+                                      'Delete ${patient.name} (Code: ${patient.patientCode}) and all related reports?',
+                                    ),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () => Navigator.of(dialogContext).pop(false),
+                                        child: const Text('Cancel'),
+                                      ),
+                                      FilledButton(
+                                        onPressed: () => Navigator.of(dialogContext).pop(true),
+                                        child: const Text('Delete'),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                                if (ok != true) return;
+                                try {
+                                  await controller.deletePatient(patient.patientId);
+                                } catch (_) {
+                                  if (mounted) {
+                                    _showMessage(controller.error ?? 'Failed to delete patient.');
+                                  }
+                                }
+                                if (!mounted) return;
+                                setModalState(() {});
+                              }
+                            },
+                            itemBuilder: (_) => const [
+                              PopupMenuItem(value: 'edit', child: Text('Edit')),
+                              PopupMenuItem(value: 'delete', child: Text('Delete')),
+                            ],
+                          ),
+                        ],
+                      ),
+                      onTap: () {
+                        controller.setSelectedPatient(patient);
+                        Navigator.pop(context);
+                      },
                             );
                           },
                         ),
@@ -1256,6 +1443,9 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
 
     final error = controller.error;
     if (error != null && error.toLowerCase().contains('no report found')) {
+      _showMessage(error);
+    }
+    if (error != null && error.toLowerCase().contains('already scanned')) {
       _showMessage(error);
     }
   }

@@ -133,6 +133,37 @@ class ReportScannerService {
     }
   }
 
+  Future<Patient> updatePatient({
+    required String patientId,
+    required String name,
+    required int age,
+    required String gender,
+  }) async {
+    try {
+      final response = await _client.dio.put<Map<String, dynamic>>(
+        '/api/patients/$patientId',
+        data: {
+          'name': name,
+          'age': age,
+          'gender': gender,
+        },
+      );
+      final body = response.data;
+      if (body == null) throw ApiException('Patient update failed.');
+      return Patient.fromJson(body);
+    } on DioException catch (e) {
+      throw ApiException.fromDioException(e, fallback: 'Failed to update patient.');
+    }
+  }
+
+  Future<void> deletePatient(String patientId) async {
+    try {
+      await _client.dio.delete('/api/patients/$patientId');
+    } on DioException catch (e) {
+      throw ApiException.fromDioException(e, fallback: 'Failed to delete patient.');
+    }
+  }
+
   Future<String> createShareLink({
     required String reportId,
     String? targetMobileNumber,

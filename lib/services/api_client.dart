@@ -36,7 +36,7 @@ class ApiClient {
 
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
-        // return 'http://$hostIp:5219';
+        //return 'http://$hostIp:5219';
         return 'http://103.92.121.94:9043';
       case TargetPlatform.iOS:
       case TargetPlatform.macOS:

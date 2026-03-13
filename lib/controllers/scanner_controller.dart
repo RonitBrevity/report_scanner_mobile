@@ -121,6 +121,61 @@ class ScannerController extends ChangeNotifier {
     }
   }
 
+  Future<Patient> updatePatient({
+    required String patientId,
+    required String name,
+    required int age,
+    required String gender,
+  }) async {
+    _isSubmitting = true;
+    _error = null;
+    notifyListeners();
+    try {
+      final updated = await _service.updatePatient(
+        patientId: patientId,
+        name: name,
+        age: age,
+        gender: gender,
+      );
+
+      _patients = _patients
+          .map((p) => p.patientId == patientId ? updated : p)
+          .toList();
+      if (_selectedPatient?.patientId == patientId) {
+        _selectedPatient = updated;
+      }
+      notifyListeners();
+      return updated;
+    } on ApiException catch (e) {
+      _error = e.message;
+      throw ApiException(e.message);
+    } finally {
+      _isSubmitting = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> deletePatient(String patientId) async {
+    _isSubmitting = true;
+    _error = null;
+    notifyListeners();
+    try {
+      await _service.deletePatient(patientId);
+      _patients = _patients.where((p) => p.patientId != patientId).toList();
+      if (_selectedPatient?.patientId == patientId) {
+        _selectedPatient = _patients.isNotEmpty ? _patients.first : null;
+        _resetReportState(notify: false);
+      }
+      await loadInitialPastReports(notifyAtStart: false);
+    } on ApiException catch (e) {
+      _error = e.message;
+      rethrow;
+    } finally {
+      _isSubmitting = false;
+      notifyListeners();
+    }
+  }
+
   void setSelectedImages(List<XFile> images) {
     _selectedImages = images.take(4).toList();
     if (_selectedImages.isNotEmpty) {

@@ -15,7 +15,6 @@ class AddPatientPage extends StatefulWidget {
 class _AddPatientPageState extends State<AddPatientPage> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
-  final _patientIdController = TextEditingController();
   final _ageController = TextEditingController();
   String _gender = 'Male';
   bool _isSaving = false;
@@ -24,7 +23,6 @@ class _AddPatientPageState extends State<AddPatientPage> {
   @override
   void dispose() {
     _nameController.dispose();
-    _patientIdController.dispose();
     _ageController.dispose();
     super.dispose();
   }
@@ -42,9 +40,6 @@ class _AddPatientPageState extends State<AddPatientPage> {
           name: _nameController.text.trim(),
           age: age,
           gender: _gender,
-          patientId: _patientIdController.text.trim().isEmpty
-              ? null
-              : _patientIdController.text.trim(),
         )
         .then((patient) {
       Navigator.of(context).pop(patient);
@@ -94,14 +89,6 @@ class _AddPatientPageState extends State<AddPatientPage> {
                   decoration: _inputDecoration('Enter full name'),
                   validator: (value) =>
                       (value == null || value.trim().isEmpty) ? 'Name is required' : null,
-                ),
-              ),
-              const SizedBox(height: 14),
-              _LabeledField(
-                label: 'Patient ID',
-                child: TextFormField(
-                  controller: _patientIdController,
-                  decoration: _inputDecoration('Optional, auto-generated if empty'),
                 ),
               ),
               const SizedBox(height: 14),

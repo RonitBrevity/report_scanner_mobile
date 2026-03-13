@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../controllers/scanner_controller.dart';
 import '../models/patient.dart';
 import 'add_patient_page.dart';
+import 'edit_patient_page.dart';
 
 class ProfilePage extends StatelessWidget {
   const ProfilePage({super.key, required this.controller});
@@ -18,26 +19,28 @@ class ProfilePage extends StatelessWidget {
         final selected = controller.selectedPatient;
         final patientCount = controller.patients.length;
         final reportCount = controller.pastReports.length + (controller.report == null ? 0 : 1);
-        return Scaffold(
-          backgroundColor: const Color(0xFFF0FDFA),
-          appBar: AppBar(
-            backgroundColor: Colors.white,
-            elevation: 0.5,
-            leading: IconButton(
-              icon: const Icon(Icons.arrow_back, color: Colors.black87),
-              onPressed: () => Navigator.of(context).pop(),
-            ),
-            title: const Text('Doctor Profile'),
-            actions: [
-              IconButton(
-                icon: const Icon(Icons.settings),
-                color: Colors.black87,
-                onPressed: () {},
-              )
-            ],
-          ),
-          body: SafeArea(
-            child: ListView(
+        return Stack(
+          children: [
+            Scaffold(
+              backgroundColor: const Color(0xFFF0FDFA),
+              appBar: AppBar(
+                backgroundColor: Colors.white,
+                elevation: 0.5,
+                leading: IconButton(
+                  icon: const Icon(Icons.arrow_back, color: Colors.black87),
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+                title: const Text('Doctor Profile'),
+                actions: [
+                  IconButton(
+                    icon: const Icon(Icons.settings),
+                    color: Colors.black87,
+                    onPressed: () {},
+                  )
+                ],
+              ),
+              body: SafeArea(
+                child: ListView(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
               children: [
                 Center(
@@ -152,6 +155,50 @@ class ProfilePage extends StatelessWidget {
                     patient: p,
                     isSelected: p.patientId == controller.selectedPatient?.patientId,
                     onTap: () => _showPatientDetails(context, p),
+                    onEdit: () async {
+                      final updated = await Navigator.of(context).push<Patient?>(
+                        MaterialPageRoute(
+                          builder: (_) => EditPatientPage(controller: controller, patient: p),
+                        ),
+                      );
+                      if (updated != null) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Patient ${updated.name} updated')),
+                        );
+                      }
+                    },
+                    onDelete: () async {
+                      final ok = await showDialog<bool>(
+                        context: context,
+                        builder: (dialogContext) => AlertDialog(
+                          title: const Text('Delete patient?'),
+                          content: Text(
+                            'Delete ${p.name} (Code: ${p.patientCode}) and all related reports?',
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.of(dialogContext).pop(false),
+                              child: const Text('Cancel'),
+                            ),
+                            FilledButton(
+                              onPressed: () => Navigator.of(dialogContext).pop(true),
+                              child: const Text('Delete'),
+                            ),
+                          ],
+                        ),
+                      );
+                      if (ok != true) return;
+                      try {
+                        await controller.deletePatient(p.patientId);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Patient ${p.name} deleted')),
+                        );
+                      } catch (_) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text(controller.error ?? 'Failed to delete patient.')),
+                        );
+                      }
+                    },
                   ),
                 ),
                 const SizedBox(height: 24),
@@ -168,7 +215,28 @@ class ProfilePage extends StatelessWidget {
                 ),
               ],
             ),
-          ),
+              ),
+            ),
+            if (controller.isSubmitting || controller.isLoadingPatients)
+              Positioned.fill(
+                child: Container(
+                  color: Colors.black.withOpacity(0.15),
+                  alignment: Alignment.center,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: const SizedBox(
+                      width: 26,
+                      height: 26,
+                      child: CircularProgressIndicator(strokeWidth: 2.6),
+                    ),
+                  ),
+                ),
+              ),
+          ],
         );
       },
     );
@@ -223,7 +291,7 @@ class ProfilePage extends StatelessWidget {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              'ID: ${patient.patientId}',
+                              'Code: ${patient.patientCode}',
                               style: TextStyle(color: Colors.grey.shade700, fontSize: 12),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
@@ -404,11 +472,15 @@ class _LinkedPatientTile extends StatelessWidget {
     required this.patient,
     required this.isSelected,
     required this.onTap,
+    required this.onEdit,
+    required this.onDelete,
   });
 
   final Patient patient;
   final bool isSelected;
   final VoidCallback onTap;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -450,13 +522,38 @@ class _LinkedPatientTile extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    'ID: ${patient.patientId}',
+                    'Code: ${patient.patientCode}',
                     style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
                   ),
                 ],
               ),
             ),
-            const Icon(Icons.chevron_right, color: Colors.grey),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  onPressed: onEdit,
+                  tooltip: 'Edit',
+                  iconSize: 20,
+                  visualDensity: VisualDensity.compact,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  icon: const Icon(Icons.edit_outlined, color: Color(0xFF0F766E)),
+                ),
+                const SizedBox(width: 10),
+                IconButton(
+                  onPressed: onDelete,
+                  tooltip: 'Delete',
+                  iconSize: 20,
+                  visualDensity: VisualDensity.compact,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  icon: Icon(Icons.delete_outline, color: Colors.red.shade600),
+                ),
+                const SizedBox(width: 10),
+                const Icon(Icons.chevron_right, color: Colors.grey),
+              ],
+            ),
           ],
         ),
       ),
