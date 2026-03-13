@@ -1,10 +1,14 @@
 import 'dart:io';
+import 'dart:typed_data';
+
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:pdfx/pdfx.dart' as pdfx;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:file_saver/file_saver.dart';
 
@@ -1135,7 +1139,7 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
                   child: FilledButton.icon(
                     onPressed: controller.isBusy || !controller.hasSelectedDocuments
                         ? null
-                        : controller.uploadAndAnalyze,
+                        : () => _beginAnalysis(controller),
                     style: FilledButton.styleFrom(
                       backgroundColor: const Color(0xFF0B6F66),
                       shape: RoundedRectangleBorder(
@@ -1155,6 +1159,18 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
         ),
       ],
     );
+  }
+
+  Future<void> _beginAnalysis(ScannerController controller) async {
+    await controller.uploadAndAnalyze();
+    if (!mounted) {
+      return;
+    }
+
+    final report = controller.report;
+    if (report != null && report.isNoReportFound) {
+      _showMessage('No report found in your image/PDF. Please upload a clear report.');
+    }
   }
 
   void _showUploadOptions(ScannerController controller) {
@@ -1265,6 +1281,7 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
     required bool allowLocalPreview,
   }) {
     final summary = controller.buildReportSummary(report);
+    final isNoReportFound = report.isNoReportFound;
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -1346,59 +1363,89 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
               color: const Color(0xFF23324D),
             ),
           ),
-          const SizedBox(height: 18),
-          _sectionTitle('CRITICAL FINDINGS', theme),
-          const SizedBox(height: 10),
-          if (report.criticalFindings.isEmpty)
-            Text(
-              'No critical findings detected.',
-              style: theme.textTheme.bodyMedium,
-            )
-          else
-            ...report.criticalFindings.map(
-              (finding) {
-                final palette = _criticalFindingColors(finding.severity);
-                return Container(
-                  width: double.infinity,
-                  margin: const EdgeInsets.only(bottom: 8),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 14,
-                  ),
-                  decoration: BoxDecoration(
-                    color: palette.bg,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border(
-                      left: BorderSide(color: palette.accent, width: 3),
+          if (isNoReportFound) ...[
+            const SizedBox(height: 14),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFF7ED),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFFFED7AA)),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.info_outline_rounded, color: Color(0xFFF97316)),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'No report found in your image/PDF. Please upload a clear report (good lighting, no blur, full page).',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: const Color(0xFF9A3412),
+                        fontWeight: FontWeight.w700,
+                        height: 1.35,
+                      ),
                     ),
                   ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          finding.finding,
-                          style: theme.textTheme.bodyLarge?.copyWith(
-                            color: const Color(0xFF1F2B3D),
+                ],
+              ),
+            ),
+          ] else ...[
+            const SizedBox(height: 18),
+            _sectionTitle('CRITICAL FINDINGS', theme),
+            const SizedBox(height: 10),
+            if (report.criticalFindings.isEmpty)
+              Text(
+                'No critical findings detected.',
+                style: theme.textTheme.bodyMedium,
+              )
+            else
+              ...report.criticalFindings.map(
+                (finding) {
+                  final palette = _criticalFindingColors(finding.severity);
+                  return Container(
+                    width: double.infinity,
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 14,
+                    ),
+                    decoration: BoxDecoration(
+                      color: palette.bg,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border(
+                        left: BorderSide(color: palette.accent, width: 3),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            finding.finding,
+                            style: theme.textTheme.bodyLarge?.copyWith(
+                              color: const Color(0xFF1F2B3D),
+                            ),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        finding.severity,
-                        style: theme.textTheme.bodyLarge?.copyWith(
-                          color: palette.accent,
-                          fontWeight: FontWeight.w800,
+                        const SizedBox(width: 8),
+                        Text(
+                          finding.severity,
+                          style: theme.textTheme.bodyLarge?.copyWith(
+                            color: palette.accent,
+                            fontWeight: FontWeight.w800,
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
-                );
-              },
-            ),
-          const SizedBox(height: 18),
-          _sectionTitle('DETAILED TEST RESULTS', theme),
-          const SizedBox(height: 12),
-          _buildDetailedResultsSection(report, theme),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            const SizedBox(height: 18),
+            _sectionTitle('DETAILED TEST RESULTS', theme),
+            const SizedBox(height: 12),
+            _buildDetailedResultsSection(report, theme),
+          ],
           const SizedBox(height: 18),
           _sectionTitle('REPORT PREVIEW', theme),
           const SizedBox(height: 10),
@@ -1407,21 +1454,25 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
             child: SizedBox(
               height: 240,
               width: double.infinity,
-              child: InkWell(
-                onTap: () => _openReportPreview(report, controller, allowLocalPreview),
-                child: report.imageUrl != null
-                    ? Image.network(
-                        _resolveImageUrl(report.imageUrl!),
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => _previewFallback(),
-                      )
-                    : allowLocalPreview && controller.selectedImages.isNotEmpty
-                    ? Image.file(
-                        File(controller.selectedImages.first.path),
-                        fit: BoxFit.cover,
-                      )
-                    : _previewFallback(),
-              ),
+                child: InkWell(
+                  onTap: () => _openReportPreview(report, controller, allowLocalPreview),
+                  child: report.imageUrl != null
+                      ? Image.network(
+                          _resolveImageUrl(report.imageUrl!),
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => _previewFallback(),
+                        )
+                      : report.pdfUrl != null
+                      ? _PdfFirstPagePreview.network(url: _resolveFileUrl(report.pdfUrl!))
+                      : allowLocalPreview && controller.selectedPdf != null
+                      ? _PdfFirstPagePreview.file(path: controller.selectedPdf!.path)
+                      : allowLocalPreview && controller.selectedImages.isNotEmpty
+                      ? Image.file(
+                          File(controller.selectedImages.first.path),
+                          fit: BoxFit.cover,
+                        )
+                      : _previewFallback(),
+                ),
             ),
           ),
         ],
@@ -2361,7 +2412,16 @@ class _AnalysisTabViewState extends State<_AnalysisTabView> {
     final hasTrendData = availableTests.isNotEmpty;
     final testsToShow = hasTrendData ? availableTests : _basicTests;
     final grouped = _groupTests(testsToShow);
-    final allGroupedTests = grouped.values.expand((e) => e).toList();
+    final categories = grouped.keys.toList()
+      ..sort((a, b) {
+        final aIndex = _categorySortIndex(a);
+        final bIndex = _categorySortIndex(b);
+        if (aIndex != bIndex) {
+          return aIndex.compareTo(bIndex);
+        }
+        return a.compareTo(b);
+      });
+    final allGroupedTests = categories.expand((category) => grouped[category] ?? const <String>[]).toList();
     if (_selectedTest == null && allGroupedTests.isNotEmpty) {
       _selectedTest = allGroupedTests.first;
     }
@@ -2423,7 +2483,7 @@ class _AnalysisTabViewState extends State<_AnalysisTabView> {
             SliverList(
               delegate: SliverChildBuilderDelegate(
                 (context, index) {
-                  final category = grouped.keys.elementAt(index);
+                  final category = categories[index];
                   final tests = grouped[category]!;
                   return Padding(
                     padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
@@ -2441,7 +2501,7 @@ class _AnalysisTabViewState extends State<_AnalysisTabView> {
                     ),
                   );
                 },
-                childCount: grouped.length,
+                childCount: categories.length,
               ),
             ),
             SliverToBoxAdapter(
@@ -2513,6 +2573,21 @@ class _AnalysisTabViewState extends State<_AnalysisTabView> {
       grouped.putIfAbsent(category, () => <String>[]).add(test);
     }
     return grouped;
+  }
+
+  int _categorySortIndex(String category) {
+    const order = <String>[
+      'Complete Blood Count',
+      'Glucose & HbA1c',
+      'Kidney Function',
+      'Liver Function',
+      'Electrolytes',
+      'Lipid Profile',
+      'Other',
+    ];
+
+    final index = order.indexOf(category);
+    return index == -1 ? order.length + 1 : index;
   }
 
   Widget _buildChartSection(ThemeData theme, String testName, List<ReportTestPoint> points) {
@@ -3423,6 +3498,132 @@ class _CompactIconButton extends StatelessWidget {
         padding: EdgeInsets.zero,
         constraints: const BoxConstraints(),
         splashRadius: 18,
+      ),
+    );
+  }
+}
+
+class _PdfFirstPagePreview extends StatefulWidget {
+  const _PdfFirstPagePreview.network({
+    required this.url,
+  }) : path = null;
+
+  const _PdfFirstPagePreview.file({
+    required this.path,
+  }) : url = null;
+
+  final String? url;
+  final String? path;
+
+  @override
+  State<_PdfFirstPagePreview> createState() => _PdfFirstPagePreviewState();
+}
+
+class _PdfFirstPagePreviewState extends State<_PdfFirstPagePreview> {
+  late final Future<Uint8List?> _previewFuture = _renderPreview();
+
+  Future<Uint8List?> _renderPreview() async {
+    pdfx.PdfDocument? document;
+    pdfx.PdfPage? page;
+
+    try {
+      if (widget.url != null) {
+        final response = await Dio().get<List<int>>(
+          widget.url!,
+          options: Options(responseType: ResponseType.bytes),
+        );
+        final bytes = Uint8List.fromList(response.data ?? <int>[]);
+        if (bytes.isEmpty) {
+          return null;
+        }
+        document = await pdfx.PdfDocument.openData(bytes);
+      } else if (widget.path != null) {
+        document = await pdfx.PdfDocument.openFile(widget.path!);
+      } else {
+        return null;
+      }
+
+      if (document.pagesCount < 1) {
+        return null;
+      }
+
+      page = await document.getPage(1);
+      final target = _scaleToMax(page.width, page.height, 1200);
+      final pageImage = await page.render(
+        width: target.$1.toDouble(),
+        height: target.$2.toDouble(),
+        format: pdfx.PdfPageImageFormat.png,
+      );
+      if (pageImage == null || pageImage.bytes.isEmpty) {
+        return null;
+      }
+      return Uint8List.fromList(pageImage.bytes);
+    } catch (_) {
+      return null;
+    } finally {
+      try {
+        await page?.close();
+      } catch (_) {}
+      try {
+        await document?.close();
+      } catch (_) {}
+    }
+  }
+
+  (int, int) _scaleToMax(double width, double height, int maxDimension) {
+    final maxSide = width > height ? width : height;
+    if (maxSide <= maxDimension) {
+      return (width.round(), height.round());
+    }
+    final ratio = maxDimension / maxSide;
+    return ((width * ratio).round(), (height * ratio).round());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<Uint8List?>(
+      future: _previewFuture,
+      builder: (context, snapshot) {
+        final bytes = snapshot.data;
+        if (snapshot.connectionState == ConnectionState.done && bytes != null) {
+          return Container(
+            color: Colors.white,
+            alignment: Alignment.center,
+            child: Image.memory(
+              bytes,
+              fit: BoxFit.contain,
+              filterQuality: FilterQuality.medium,
+              errorBuilder: (_, __, ___) => _fallback(),
+            ),
+          );
+        }
+
+        if (snapshot.hasError ||
+            (snapshot.connectionState == ConnectionState.done && bytes == null)) {
+          return _fallback();
+        }
+
+        return Container(
+          color: const Color(0xFFE3ECEC),
+          alignment: Alignment.center,
+          child: const SizedBox(
+            width: 22,
+            height: 22,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _fallback() {
+    return Container(
+      color: const Color(0xFFE3ECEC),
+      alignment: Alignment.center,
+      child: const Icon(
+        Icons.picture_as_pdf_outlined,
+        size: 56,
+        color: Color(0xFF748086),
       ),
     );
   }

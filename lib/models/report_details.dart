@@ -10,6 +10,8 @@ class ReportDetails {
   final List<ReportTest> tests;
   final List<CriticalFinding> criticalFindings;
 
+  bool get isNoReportFound => tests.isEmpty;
+
   const ReportDetails({
     required this.reportId,
     required this.patientId,
