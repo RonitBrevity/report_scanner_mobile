@@ -1339,6 +1339,8 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
           const SizedBox(height: 8),
           Text(
             summary,
+            maxLines: 9,
+            overflow: TextOverflow.ellipsis,
             style: theme.textTheme.bodyMedium?.copyWith(
               height: 1.55,
               color: const Color(0xFF23324D),
@@ -1354,41 +1356,44 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
             )
           else
             ...report.criticalFindings.map(
-              (finding) => Container(
-                width: double.infinity,
-                margin: const EdgeInsets.only(bottom: 8),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 14,
-                ),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFFF6F6),
-                  borderRadius: BorderRadius.circular(12),
-                  border: const Border(
-                    left: BorderSide(color: Colors.redAccent, width: 3),
+              (finding) {
+                final palette = _criticalFindingColors(finding.severity);
+                return Container(
+                  width: double.infinity,
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 14,
                   ),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        finding.finding,
-                        style: theme.textTheme.bodyLarge?.copyWith(
-                          color: const Color(0xFF1F2B3D),
+                  decoration: BoxDecoration(
+                    color: palette.bg,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border(
+                      left: BorderSide(color: palette.accent, width: 3),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          finding.finding,
+                          style: theme.textTheme.bodyLarge?.copyWith(
+                            color: const Color(0xFF1F2B3D),
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      finding.severity,
-                      style: theme.textTheme.bodyLarge?.copyWith(
-                        color: Colors.redAccent,
-                        fontWeight: FontWeight.w800,
+                      const SizedBox(width: 8),
+                      Text(
+                        finding.severity,
+                        style: theme.textTheme.bodyLarge?.copyWith(
+                          color: palette.accent,
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-              ),
+                    ],
+                  ),
+                );
+              },
             ),
           const SizedBox(height: 18),
           _sectionTitle('DETAILED TEST RESULTS', theme),
@@ -1537,44 +1542,44 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
   Widget _buildRangeIndicator(ReportTest test, Color accentColor) {
     return Column(
       children: [
-        Stack(
-          children: [
-            Container(
-              height: 6,
-              width: double.infinity,
-              decoration: BoxDecoration(
-                color: const Color(0xFFE2E8F0),
-                borderRadius: BorderRadius.circular(3),
-              ),
-            ),
-            // Normal range highlight (simplified, middle 60%)
-            Positioned(
-              left: 40, // Offset for normal range start
-              right: 40, // Offset for normal range end
-              child: Container(
-                height: 6,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF2DD4BF).withOpacity(0.3),
-                ),
-              ),
-            ),
-            // Bullet for current value
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final rMin = test.rangeMin;
-                final rMax = test.rangeMax;
-                
-                double position;
-                if (rMin == null || rMax == null || rMax <= rMin) {
-                  position = 0.5; // Center if no range
-                } else {
-                  final range = rMax - rMin;
-                  position = (test.value - rMin) / range;
-                  // Clamp to show on bar even if out of range
-                  position = (position * 0.6 + 0.2).clamp(0.05, 0.95);
-                }
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final rMin = test.rangeMin;
+            final rMax = test.rangeMax;
 
-                return Positioned(
+            double position;
+            if (rMin == null || rMax == null || rMax <= rMin) {
+              position = 0.5; // Center if no range
+            } else {
+              final range = rMax - rMin;
+              position = (test.value - rMin) / range;
+              // Clamp to show on bar even if out of range.
+              position = (position * 0.6 + 0.2).clamp(0.05, 0.95);
+            }
+
+            return Stack(
+              children: [
+                Container(
+                  height: 6,
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE2E8F0),
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                ),
+                // Normal range highlight (simplified, middle 60%).
+                Positioned(
+                  left: 40, // Offset for normal range start.
+                  right: 40, // Offset for normal range end.
+                  child: Container(
+                    height: 6,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF2DD4BF).withOpacity(0.3),
+                    ),
+                  ),
+                ),
+                // Bullet for current value.
+                Positioned(
                   left: constraints.maxWidth * position - 4,
                   child: Container(
                     width: 8,
@@ -1592,10 +1597,10 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
                       ],
                     ),
                   ),
-                );
-              },
-            ),
-          ],
+                ),
+              ],
+            );
+          },
         ),
       ],
     );
@@ -2233,6 +2238,25 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
         ],
       ),
     );
+  }
+
+  ({Color accent, Color bg}) _criticalFindingColors(String severity) {
+    final normalized = severity.trim().toLowerCase();
+
+    if (normalized.contains('high') || normalized.contains('critical')) {
+      return (accent: Colors.redAccent, bg: const Color(0xFFFFF1F1));
+    }
+    if (normalized.contains('normal') || normalized.contains('ok')) {
+      return (accent: const Color(0xFF16A34A), bg: const Color(0xFFF0FDF4));
+    }
+    if (normalized.contains('medium') || normalized.contains('moderate')) {
+      return (accent: const Color(0xFFF97316), bg: const Color(0xFFFFF7ED));
+    }
+    if (normalized.contains('low')) {
+      return (accent: const Color(0xFF2563EB), bg: const Color(0xFFEFF6FF));
+    }
+
+    return (accent: const Color(0xFF64748B), bg: const Color(0xFFF1F5F9));
   }
 
   ButtonStyle _filterButtonStyle() {

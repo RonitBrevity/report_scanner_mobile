@@ -112,32 +112,49 @@ class ReportDocumentService {
           pw.Text('Report date: ${_formatDate(report.uploadDateUtc)}'),
           pw.Text('Risk level: ${report.riskLevel ?? 'Unknown'}'),
           pw.SizedBox(height: 16),
-          pw.Text(
-            'Overall Summary',
-            style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold),
-          ),
-          pw.SizedBox(height: 6),
-          pw.Text(_buildTotalSummary(report)),
-          pw.SizedBox(height: 16),
-          pw.Text(
-            'Critical Findings',
-            style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold),
-          ),
-          pw.SizedBox(height: 6),
-          if (report.criticalFindings.isEmpty)
-            pw.Text('No critical findings were identified.')
-          else
-            ...report.criticalFindings.map(
-              (finding) => pw.Padding(
-                padding: const pw.EdgeInsets.only(bottom: 4),
-                child: pw.Text('- ${finding.finding} (${finding.severity})'),
-              ),
-            ),
-          pw.SizedBox(height: 16),
-          pw.Text(
-            'Abnormal Test Summary',
-            style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold),
-          ),
+           pw.Text(
+             'Overall Summary',
+             style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold),
+           ),
+           pw.SizedBox(height: 6),
+           pw.Text(_buildShortSummary(report)),
+           pw.SizedBox(height: 16),
+           pw.Text(
+             'Critical Findings',
+             style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold),
+           ),
+           pw.SizedBox(height: 6),
+           if (report.criticalFindings.isEmpty)
+             pw.Text('No critical findings were identified.')
+           else
+             ...report.criticalFindings.map(
+              (finding) {
+                final severityColor = _criticalFindingSeverityColor(finding.severity);
+                return pw.Padding(
+                  padding: const pw.EdgeInsets.only(bottom: 4),
+                  child: pw.RichText(
+                    text: pw.TextSpan(
+                      children: [
+                        pw.TextSpan(text: '- ${finding.finding} ('),
+                        pw.TextSpan(
+                          text: finding.severity,
+                          style: pw.TextStyle(
+                            color: severityColor,
+                            fontWeight: pw.FontWeight.bold,
+                          ),
+                        ),
+                        pw.TextSpan(text: ')'),
+                      ],
+                    ),
+                  ),
+                );
+              },
+             ),
+           pw.SizedBox(height: 16),
+           pw.Text(
+             'Abnormal Test Summary',
+             style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold),
+           ),
           pw.SizedBox(height: 6),
           if (abnormalTests.isEmpty)
             pw.Text('All extracted tests are within the normal range.')
@@ -167,7 +184,62 @@ class ReportDocumentService {
     return file.path;
   }
 
-  String buildPreviewSummary(ReportDetails report) => _buildTotalSummary(report);
+  String buildPreviewSummary(ReportDetails report) => _buildShortSummary(report);
+
+  String _buildShortSummary(ReportDetails report) {
+    return _compactSummary(_buildTotalSummary(report));
+  }
+
+  String _compactSummary(
+    String text, {
+    int maxLines = 9,
+    int maxChars = 700,
+  }) {
+    final normalized = text.trim().replaceAll(RegExp(r'[ \t]+'), ' ');
+    if (normalized.isEmpty) return normalized;
+
+    // Prefer keeping the first few non-empty lines if the summary is already structured.
+    final rawLines = text.split(RegExp(r'\r?\n')).map((l) => l.trim()).where((l) => l.isNotEmpty).toList();
+    if (rawLines.length >= 2) {
+      final kept = rawLines.take(maxLines).join('\n');
+      return rawLines.length > maxLines ? '$kept…' : kept;
+    }
+
+    // Otherwise, keep a few sentences within a safe length budget.
+    final sentences = normalized.split(RegExp(r'(?<=[.!?])\s+')).where((s) => s.trim().isNotEmpty).toList();
+    if (sentences.isEmpty) {
+      return normalized.length > maxChars ? '${normalized.substring(0, maxChars).trimRight()}…' : normalized;
+    }
+
+    final buffer = StringBuffer();
+    for (final sentence in sentences) {
+      final candidate = buffer.isEmpty ? sentence : '${buffer.toString()} $sentence';
+      if (candidate.length > maxChars) {
+        break;
+      }
+      buffer
+        ..write(buffer.isEmpty ? '' : ' ')
+        ..write(sentence);
+      if (buffer.length > maxChars) {
+        break;
+      }
+    }
+
+    final result = buffer.toString().trim();
+    if (result.isEmpty) {
+      return sentences.first.length > maxChars ? '${sentences.first.substring(0, maxChars).trimRight()}…' : sentences.first;
+    }
+    return result.length < normalized.length ? '$result…' : result;
+  }
+
+  PdfColor _criticalFindingSeverityColor(String severity) {
+    final normalized = severity.trim().toLowerCase();
+    if (normalized.contains('high') || normalized.contains('critical')) return PdfColors.red;
+    if (normalized.contains('normal') || normalized.contains('ok')) return PdfColors.green;
+    if (normalized.contains('medium') || normalized.contains('moderate')) return PdfColors.orange;
+    if (normalized.contains('low')) return PdfColors.blue;
+    return PdfColors.blueGrey;
+  }
 
   String _buildTotalSummary(ReportDetails report) {
     final abnormalTests = report.tests.where((test) => test.status != 'Normal').toList();
