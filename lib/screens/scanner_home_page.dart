@@ -1171,6 +1171,11 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
     if (report != null && report.isNoReportFound) {
       _showMessage('No report found in your image/PDF. Please upload a clear report.');
     }
+
+    final error = controller.error;
+    if (error != null && error.toLowerCase().contains('no report found')) {
+      _showMessage(error);
+    }
   }
 
   void _showUploadOptions(ScannerController controller) {
