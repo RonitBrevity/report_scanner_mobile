@@ -46,6 +46,7 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
   bool _abnormalOnly = false;
   String _testTypeFilter = 'All';
   String _patientSearchQuery = '';
+  bool _isPickingDocument = false;
 
   @override
   void initState() {
@@ -75,13 +76,43 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
   }
 
   Future<void> _pickCameraImage() async {
-    final image = await _picker.pickImage(
-      source: ImageSource.camera,
-      imageQuality: 80,
-      maxWidth: 1600,
-      maxHeight: 1600,
-    );
+    if (_isPickingDocument) {
+      return;
+    }
+
+    setState(() => _isPickingDocument = true);
+    XFile? image;
+    try {
+      image = await _picker.pickImage(
+        source: ImageSource.camera,
+        imageQuality: 80,
+        maxWidth: 1600,
+        maxHeight: 1600,
+      );
+    } on PlatformException catch (e) {
+      final msg = (e.message ?? '').toLowerCase();
+      if (msg.contains('denied') || msg.contains('permission')) {
+        _showMessage('Camera permission is denied. Enable it in iOS Settings and try again.');
+      } else {
+        _showMessage('Unable to open camera. Please try again.');
+      }
+      return;
+    } catch (_) {
+      _showMessage('Unable to open camera. Please try again.');
+      return;
+    } finally {
+      if (mounted) {
+        setState(() => _isPickingDocument = false);
+      } else {
+        _isPickingDocument = false;
+      }
+    }
+
     if (image == null) {
+      return;
+    }
+    if (image.path.isEmpty) {
+      _showMessage('Camera returned an invalid file. Please try again.');
       return;
     }
 
@@ -97,11 +128,37 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
   }
 
   Future<void> _pickGalleryImages() async {
-    final images = await _picker.pickMultiImage(
-      imageQuality: 80,
-      maxWidth: 1600,
-      maxHeight: 1600,
-    );
+    if (_isPickingDocument) {
+      return;
+    }
+
+    setState(() => _isPickingDocument = true);
+    List<XFile> images;
+    try {
+      images = await _picker.pickMultiImage(
+        imageQuality: 80,
+        maxWidth: 1600,
+        maxHeight: 1600,
+      );
+    } on PlatformException catch (e) {
+      final msg = (e.message ?? '').toLowerCase();
+      if (msg.contains('denied') || msg.contains('permission')) {
+        _showMessage('Photo permission is denied. Enable it in iOS Settings and try again.');
+      } else {
+        _showMessage('Unable to open gallery. Please try again.');
+      }
+      return;
+    } catch (_) {
+      _showMessage('Unable to open gallery. Please try again.');
+      return;
+    } finally {
+      if (mounted) {
+        setState(() => _isPickingDocument = false);
+      } else {
+        _isPickingDocument = false;
+      }
+    }
+
     if (images.isEmpty) {
       return;
     }
@@ -116,10 +173,35 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
   }
 
   Future<void> _pickPdf() async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: const ['pdf'],
-    );
+    if (_isPickingDocument) {
+      return;
+    }
+
+    setState(() => _isPickingDocument = true);
+    FilePickerResult? result;
+    try {
+      result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: const ['pdf'],
+      );
+    } on PlatformException catch (e) {
+      final msg = (e.message ?? '').toLowerCase();
+      if (msg.contains('denied') || msg.contains('permission')) {
+        _showMessage('File access permission is denied. Enable it in iOS Settings and try again.');
+      } else {
+        _showMessage('Unable to pick PDF. Please try again.');
+      }
+      return;
+    } catch (_) {
+      _showMessage('Unable to pick PDF. Please try again.');
+      return;
+    } finally {
+      if (mounted) {
+        setState(() => _isPickingDocument = false);
+      } else {
+        _isPickingDocument = false;
+      }
+    }
 
     if (result == null || result.files.isEmpty) {
       return;
